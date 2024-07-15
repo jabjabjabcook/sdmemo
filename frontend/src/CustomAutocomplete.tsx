@@ -256,10 +256,16 @@ export const CustomAutocomplete = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      const newTag = inputValue.trim();
-      if (newTag && !value.includes(newTag)) {
-        onChange([...value, newTag]);
-        setInputValue('');
+      const newTags = inputValue
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag !== '');
+      if (newTags.length > 0) {
+        const uniqueNewTags = newTags.filter((tag) => !value.includes(tag));
+        if (uniqueNewTags.length > 0) {
+          onChange([...value, ...uniqueNewTags]);
+          setInputValue('');
+        }
       }
     }
   };

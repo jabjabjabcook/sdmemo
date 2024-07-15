@@ -14,6 +14,7 @@ import {
   Typography,
   Chip,
   IconButton,
+  TextField,
 } from '@mui/material';
 import ClearIcon from '@mui/icons-material/Clear';
 import { EventsOn, WindowSetLightTheme, WindowSetDarkTheme, BrowserOpenURL, ClipboardSetText } from '../wailsjs/runtime/runtime';
@@ -22,6 +23,7 @@ import { SelectSaveFileUri, ExportLogs, SelectFile, ImportLogs } from '../wailsj
 import '@fontsource-variable/m-plus-1-code';
 
 interface PromptSet {
+  title?: string;
   timestamp: string;
   positive: string[];
   negative: string[];
@@ -40,6 +42,7 @@ function App() {
   const [promptHistory, setPromptHistory] = useState<PromptSet[]>(JSON.parse(localStorage.getItem('promptHistory') || '[]'));
   const [selectedPromptSet, setSelectedPromptSet] = useState<PromptSet | null>(null);
   const [hoveredMenuItem, setHoveredMenuItem] = useState<number | null>(null);
+  const [title, setTitle] = useState<string>('');
 
   const theme = createTheme({
     palette: {
@@ -76,6 +79,7 @@ function App() {
     setAllNegativeTagList(newNegativeTagList);
 
     const newPromptSet: PromptSet = {
+      title,
       timestamp: new Date().toLocaleString('ja-JP', {
         year: '2-digit',
         month: '2-digit',
@@ -138,6 +142,7 @@ function App() {
     setSelectedPromptSet(selected);
     setSelectedPositiveTags(selected.positive);
     setSelectedNegativeTags(selected.negative);
+    setTitle(selected.title || '');
   };
 
   const handleDeletePromptSet = (index: number) => {
@@ -148,6 +153,7 @@ function App() {
       setSelectedPromptSet(null);
       setSelectedPositiveTags([]);
       setSelectedNegativeTags([]);
+      setTitle('');
     }
   };
 
@@ -176,7 +182,7 @@ function App() {
       onMouseLeave={() => setHoveredMenuItem(null)}
     >
       <Typography variant='body2' sx={{ mb: 1 }}>
-        {promptSet.timestamp}
+        {promptSet.timestamp} {promptSet.title ? `[${promptSet.title}]` : ''}
       </Typography>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
         {promptSet.positive.map((tag, i) => (
@@ -237,7 +243,9 @@ function App() {
             renderValue={(index) => {
               if (index === -1) return 'Select a prompt set';
               const promptSet = promptHistory[index as number];
-              return `${promptSet.timestamp} [P: ${promptSet.positive.length}] [N: ${promptSet.negative.length}]`;
+              return `${promptSet.timestamp} ${promptSet.title ? `[${promptSet.title}]` : ''} [P: ${
+                promptSet.positive.length
+              }] [N: ${promptSet.negative.length}]`;
             }}
           >
             {promptHistory.map((promptSet, index) => renderMenuItem(promptSet, index))}
@@ -263,6 +271,20 @@ function App() {
           <Button onClick={handleCopy} variant='contained' color='primary' sx={{ mr: 2, textTransform: 'none' }}>
             Copy & Save
           </Button>
+          <TextField
+            label='Title (optional)'
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            sx={{ mr: 2, width: '50%', maxWidth: '300px', '& .MuiInputLabel-formControl': { zIndex: -1 } }}
+            size='small'
+            InputProps={{
+              endAdornment: title && (
+                <IconButton size='small' onClick={() => setTitle('')}>
+                  <ClearIcon fontSize='small' />
+                </IconButton>
+              ),
+            }}
+          />
           <DarkModeSwitch checked={isDarkMode} onChange={handleDarkMode} sx={{ mr: 2 }} />
           <Button onClick={handleImport} variant='outlined' color='inherit' sx={{ mr: 2, textTransform: 'none' }}>
             Import

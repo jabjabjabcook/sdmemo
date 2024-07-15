@@ -17,10 +17,10 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "sdmemo" + " v0.0.3",
+		Title:  "sdmemo" + " v0.0.4",
 		Width:  1024,
 		Height: 700,
-		MinWidth: 300,
+		MinWidth: 696,
 		MinHeight: 480,
 		AssetServer: &assetserver.Options{
 			Assets: assets,

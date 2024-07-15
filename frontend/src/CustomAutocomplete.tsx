@@ -4,7 +4,23 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import ClearIcon from '@mui/icons-material/Clear';
 import { styled } from '@mui/material/styles';
-import { Box, autocompleteClasses, IconButton } from '@mui/material';
+import { autocompleteClasses, IconButton, Box } from '@mui/material';
+import {
+  DndContext,
+  rectIntersection,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverEvent,
+  DragOverlay,
+  DraggableAttributes,
+  DraggableSyntheticListeners,
+} from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const Root = styled('div')(
   ({ theme }) => `
@@ -57,14 +73,22 @@ const InputWrapper = styled('div')(
 );
 
 interface TagProps extends ReturnType<AutocompleteGetTagProps> {
+  id?: string;
   label: string;
+  handlerProps?: {
+    ref: (element: HTMLElement | null) => void;
+    attributes: DraggableAttributes;
+    listeners: DraggableSyntheticListeners;
+  };
 }
 
 function Tag(props: TagProps) {
-  const { label, onDelete, ...other } = props;
+  const { label, onDelete, handlerProps, ...other } = props;
   return (
     <div {...other}>
-      <span>{label}</span>
+      <span {...handlerProps?.attributes} {...handlerProps?.listeners} style={{ cursor: handlerProps ? 'grab' : 'grabbing' }}>
+        {label}
+      </span>
       <CloseIcon onClick={onDelete} />
     </div>
   );
@@ -151,17 +175,56 @@ const Listbox = styled('ul')(
 `
 );
 
+const SortableTag = (props: TagProps & { id: string }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.id });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0 : 1,
+    touchAction: 'none',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <StyledTag
+        {...props}
+        handlerProps={{
+          ref: setNodeRef,
+          attributes,
+          listeners,
+        }}
+        onDelete={(e) => {
+          const deleteTag = props.id;
+          e.preventDefault();
+          e.stopPropagation();
+          props.onDelete(deleteTag);
+        }}
+      />
+    </div>
+  );
+};
+
 interface CustomAutocompleteProps {
   tagList: string[];
   tagLabel: string;
-  onChange: (selectedTags: string[]) => void;
+  onChange: (selectedTags: string[] | ((prev: string[]) => string[])) => void;
   initialValue?: string[];
   onDeleteTag: (tag: string) => void;
+  onClear: () => void;
 }
 
-export const CustomAutocomplete = ({ tagList, tagLabel, onChange, initialValue, onDeleteTag }: CustomAutocompleteProps) => {
+export const CustomAutocomplete = ({
+  tagList,
+  tagLabel,
+  onChange,
+  initialValue,
+  onDeleteTag,
+  onClear,
+}: CustomAutocompleteProps) => {
   const [inputValue, setInputValue] = useState('');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const {
     getRootProps,
@@ -201,15 +264,81 @@ export const CustomAutocomplete = ({ tagList, tagLabel, onChange, initialValue, 
     }
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      onChange((items: string[]) => {
+        const oldIndex = items.indexOf(active.id.toString());
+        const newIndex = items.indexOf(over.id.toString());
+
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = value.indexOf(active.id.toString());
+      const newIndex = value.indexOf(over.id.toString());
+      const newValue = arrayMove(value, oldIndex, newIndex);
+      onChange(newValue);
+    }
+
+    setActiveId(null);
+  };
+
   return (
     <Root>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Label {...getInputLabelProps()} sx={{ color: tagLabel === 'Positive' ? 'primary.main' : 'error.main' }}>
+          {tagLabel}
+        </Label>
+        <IconButton onClick={onClear} size='small'>
+          <ClearIcon fontSize='small' />
+        </IconButton>
+      </Box>
       <div {...getRootProps()}>
-        <Label {...getInputLabelProps()}>{tagLabel}</Label>
         <InputWrapper ref={setAnchorEl} className={focused ? 'focused' : ''}>
-          {value.map((option: string, index: number) => {
-            const { key, ...tagProps } = getTagProps({ index });
-            return <StyledTag key={key} {...tagProps} label={option} />;
-          })}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={rectIntersection}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={value}>
+              {value.map((option: string, index: number) => {
+                const { key, ...tagProps } = getTagProps({ index });
+                return (
+                  <SortableTag
+                    key={key}
+                    id={option}
+                    {...tagProps}
+                    label={option}
+                    onDelete={() => {
+                      const newValue = value.filter((item) => item !== option);
+                      onChange(newValue);
+                    }}
+                  />
+                );
+              })}
+            </SortableContext>
+            <DragOverlay>{activeId ? <StyledTag label={activeId} {...getTagProps({ index: 0 })} /> : null}</DragOverlay>
+          </DndContext>
           <input {...getInputProps()} onKeyDown={handleKeyDown} />
         </InputWrapper>
       </div>

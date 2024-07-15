@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DarkModeSwitch } from './DarkModeSwitch';
 import {
   ThemeProvider,
@@ -19,6 +19,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import { EventsOn, WindowSetLightTheme, WindowSetDarkTheme, BrowserOpenURL, ClipboardSetText } from '../wailsjs/runtime/runtime';
 import { CustomAutocomplete } from './CustomAutocomplete';
 import { SelectSaveFileUri, ExportLogs, SelectFile, ImportLogs } from '../wailsjs/go/main/App';
+import '@fontsource-variable/m-plus-1-code';
 
 interface PromptSet {
   timestamp: string;
@@ -44,6 +45,9 @@ function App() {
     palette: {
       mode: isDarkMode ? 'dark' : 'light',
     },
+    typography: {
+      fontFamily: ['M PLUS 1 Code Variable', 'Consolas', 'Menlo', 'BIZ UDゴシック', 'Courier New', 'monospace'].join(','),
+    },
   });
 
   const handleDarkMode = () => {
@@ -58,6 +62,7 @@ function App() {
 
   const handleCopy = async () => {
     await ClipboardSetText(selectedNegativeTags.join(', '));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     await ClipboardSetText(selectedPositiveTags.join(', '));
 
     const sortAndRemoveDuplicates = (arr: string[]) => {
@@ -179,7 +184,7 @@ function App() {
             key={`p-${i}`}
             label={tag}
             size='small'
-            color='success'
+            color='primary'
             sx={{ maxWidth: '100%', height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal' } }}
           />
         ))}
@@ -240,17 +245,19 @@ function App() {
         </FormControl>
         <CustomAutocomplete
           tagList={allPositiveTagList}
-          tagLabel='Positive Prompts'
+          tagLabel='Positive'
           onChange={setSelectedPositiveTags}
           initialValue={selectedPositiveTags}
           onDeleteTag={handleDeleteTagPositive}
+          onClear={() => setSelectedPositiveTags([])}
         />
         <CustomAutocomplete
           tagList={allNegativeTagList}
-          tagLabel='Negative Prompts'
+          tagLabel='Negative'
           onChange={setSelectedNegativeTags}
           initialValue={selectedNegativeTags}
           onDeleteTag={handleDeleteTagNegative}
+          onClear={() => setSelectedNegativeTags([])}
         />
         <Box sx={{ display: 'flex', justifyContent: 'right', alignItems: 'center', mt: 2 }}>
           <Button onClick={handleCopy} variant='contained' color='primary' sx={{ mr: 2, textTransform: 'none' }}>

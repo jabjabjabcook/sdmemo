@@ -17,7 +17,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "sdmemo" + " v0.0.1",
+		Title:  "sdmemo" + " v0.0.2",
 		Width:  1024,
 		Height: 640,
 		MinWidth: 300,

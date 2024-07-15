@@ -178,27 +178,24 @@ export const CustomAutocomplete = ({ tagList, tagLabel, onChange, initialValue, 
     id: 'customized-hook-' + tagLabel,
     multiple: true,
     options: tagList,
-    getOptionLabel: (option) => option,
     value: initialValue,
     onChange: (_, newValue) => {
       onChange(newValue);
     },
+    inputValue: inputValue,
+    onInputChange: (_, newInputValue) => {
+      setInputValue(newInputValue);
+    },
+    getOptionLabel: (option) => option,
+    isOptionEqualToValue: (option, value) => option === value,
   });
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
-  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      const newTags = inputValue
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter((tag) => tag !== '' && !value.includes(tag));
-      if (newTags.length > 0) {
-        const updatedValue = [...value, ...newTags];
-        onChange(updatedValue);
+      const newTag = inputValue.trim();
+      if (newTag && !value.includes(newTag)) {
+        onChange([...value, newTag]);
         setInputValue('');
       }
     }
@@ -206,16 +203,16 @@ export const CustomAutocomplete = ({ tagList, tagLabel, onChange, initialValue, 
 
   return (
     <Root>
-      <Box {...getRootProps()}>
+      <div {...getRootProps()}>
         <Label {...getInputLabelProps()}>{tagLabel}</Label>
         <InputWrapper ref={setAnchorEl} className={focused ? 'focused' : ''}>
           {value.map((option: string, index: number) => {
             const { key, ...tagProps } = getTagProps({ index });
             return <StyledTag key={key} {...tagProps} label={option} />;
           })}
-          <input {...getInputProps()} value={inputValue} onChange={handleInputChange} onKeyDown={handleKeyDown} />
+          <input {...getInputProps()} onKeyDown={handleKeyDown} />
         </InputWrapper>
-      </Box>
+      </div>
       {groupedOptions.length > 0 ? (
         <Listbox {...getListboxProps()}>
           {(groupedOptions as string[]).map((option, index) => {

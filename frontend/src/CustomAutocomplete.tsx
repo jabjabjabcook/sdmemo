@@ -62,12 +62,12 @@ const InputWrapper = styled('div')(
   flex-wrap: wrap;
 
   &:hover {
-    border-color: ${theme.palette.mode === 'dark' ? '#177ddc' : '#000000'};
+    border-color: ${theme.palette.mode === 'dark' ? '#ffffff' : '#000000'};
   }
 
   &.focused {
     border: 1px solid ${theme.palette.primary.main};
-    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+    box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.2);
   }
 
   & input {

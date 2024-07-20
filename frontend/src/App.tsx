@@ -8,6 +8,8 @@ import {
   Select,
   MenuItem,
   SelectChangeEvent,
+  Switch,
+  FormControlLabel,
   Box,
   FormControl,
   InputLabel,
@@ -63,6 +65,7 @@ function App() {
   const [positiveDictDrawerOpen, setPositiveDictDrawerOpen] = useState<boolean>(false);
   const [negativeDictDrawerOpen, setNegativeDictDrawerOpen] = useState<boolean>(false);
   const [quickMemo, setQuickMemo] = useState<string>(localStorage.getItem('quickMemo') || '');
+  const [isCopyButtonTrue, setIsCopyButtonTrue] = useState<boolean>(true);
   const [title, setTitle] = useState<string>('');
 
   const copyButtonRef = useRef<HTMLButtonElement>(null);
@@ -71,6 +74,12 @@ function App() {
   const theme = createTheme({
     palette: {
       mode: isDarkMode ? 'dark' : 'light',
+      primary: {
+        main: '#755eff',
+      },
+      secondary: {
+        main: '#bfb4ff',
+      },
     },
     typography: {
       fontFamily: ['Roboto', 'sans-serif'].join(','),
@@ -129,9 +138,11 @@ function App() {
   };
 
   const handleCopy = async () => {
-    await ClipboardSetText(selectedNegativeTags.join(', '));
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    await ClipboardSetText(selectedPositiveTags.join(', '));
+    if (isCopyButtonTrue) {
+      await ClipboardSetText(selectedPositiveTags.join(', '));
+    } else {
+      await ClipboardSetText(selectedNegativeTags.join(', '));
+    }
 
     const sortAndRemoveDuplicates = (arr: string[]) => {
       return Array.from(new Set(arr)).sort((a, b) => a.localeCompare(b));
@@ -335,7 +346,7 @@ function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key === 'c') {
+      if (event.altKey && event.key === 'c') {
         event.preventDefault();
         copyButtonRef.current?.focus();
         copyButtonRef.current?.click();
@@ -464,7 +475,7 @@ function App() {
       <Divider />
       <Box sx={{ p: 2, pt: 0 }}>
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 2 }}>
-          <Tooltip title='Ctrl + C' arrow>
+          <Tooltip title='Alt + C' arrow>
             <Button
               ref={copyButtonRef}
               onClick={handleCopy}
@@ -474,6 +485,28 @@ function App() {
               sx={{ mr: 2, textTransform: 'none' }}
             >
               Copy
+              <FormControlLabel
+                sx={{ ml: 1, mr: -0.5, width: 50 }}
+                label={isCopyButtonTrue ? 'P' : 'N'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setIsCopyButtonTrue(!isCopyButtonTrue);
+                }}
+                control={
+                  <Switch
+                    checked={isCopyButtonTrue}
+                    onChange={() => setIsCopyButtonTrue(!isCopyButtonTrue)}
+                    size='small'
+                    color='secondary'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setIsCopyButtonTrue(!isCopyButtonTrue);
+                    }}
+                  />
+                }
+              />
             </Button>
           </Tooltip>
           <Tooltip title='Ctrl + S' arrow>
@@ -503,10 +536,27 @@ function App() {
             }}
           />
           <DarkModeSwitch checked={isDarkMode} onChange={handleDarkMode} sx={{ mr: 2 }} />
-          <Button onClick={handleImport} variant='outlined' color='info' sx={{ mr: 2, textTransform: 'none' }}>
+          <Button
+            onClick={handleImport}
+            variant='outlined'
+            color='inherit'
+            sx={{
+              mr: 2,
+              textTransform: 'none',
+              borderColor: theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.action.active,
+            }}
+          >
             Import logs
           </Button>
-          <Button onClick={handleExport} variant='outlined' color='info' sx={{ textTransform: 'none' }}>
+          <Button
+            onClick={handleExport}
+            variant='outlined'
+            color='inherit'
+            sx={{
+              textTransform: 'none',
+              borderColor: theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.action.active,
+            }}
+          >
             Export logs
           </Button>
         </Box>

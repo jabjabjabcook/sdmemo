@@ -7,4 +7,4 @@ export function ImportLogs(arg1:string):Promise<string>;
 
 export function SelectFile():Promise<string>;
 
-export function SelectSaveFileUri():Promise<string>;
+export function SelectSaveFileUri(arg1:string):Promise<string>;

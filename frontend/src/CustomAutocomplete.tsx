@@ -1,10 +1,22 @@
 import { useState } from 'react';
 import { useAutocomplete, AutocompleteGetTagProps } from '@mui/base/useAutocomplete';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
-import ClearIcon from '@mui/icons-material/Clear';
+import { Check, Close, Clear, Settings } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
-import { autocompleteClasses, IconButton, Box } from '@mui/material';
+import {
+  autocompleteClasses,
+  Autocomplete,
+  IconButton,
+  Box,
+  TextField,
+  Button,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Tooltip,
+  useTheme,
+} from '@mui/material';
 import {
   DndContext,
   rectIntersection,
@@ -21,6 +33,8 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { addToDictionary, getDictionary } from './utils/indexedDB';
+import '@fontsource-variable/roboto-mono';
 
 const Root = styled('div')(
   ({ theme }) => `
@@ -48,11 +62,11 @@ const InputWrapper = styled('div')(
   flex-wrap: wrap;
 
   &:hover {
-    border-color: ${theme.palette.mode === 'dark' ? '#177ddc' : '#40a9ff'};
+    border-color: ${theme.palette.mode === 'dark' ? '#177ddc' : '#000000'};
   }
 
   &.focused {
-    border-color: ${theme.palette.mode === 'dark' ? '#177ddc' : '#40a9ff'};
+    border: 1px solid ${theme.palette.primary.main};
     box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
   }
 
@@ -84,12 +98,19 @@ interface TagProps extends ReturnType<AutocompleteGetTagProps> {
 
 function Tag(props: TagProps) {
   const { label, onDelete, handlerProps, ...other } = props;
+  const theme = useTheme();
+  const [isHovered, setIsHovered] = useState(false);
   return (
     <div {...other}>
       <span {...handlerProps?.attributes} {...handlerProps?.listeners} style={{ cursor: handlerProps ? 'grab' : 'grabbing' }}>
         {label}
       </span>
-      <CloseIcon onClick={onDelete} />
+      <Close
+        onClick={onDelete}
+        sx={{ color: isHovered ? theme.palette.error.main : 'inherit' }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      />
     </div>
   );
 }
@@ -108,6 +129,7 @@ const StyledTag = styled(Tag)<TagProps>(
   padding: 0 4px 0 10px;
   outline: 0;
   overflow: hidden;
+  font-family: 'Roboto Mono Variable', monospace;
 
   &:focus {
     border-color: ${theme.palette.mode === 'dark' ? '#177ddc' : '#40a9ff'};
@@ -124,6 +146,10 @@ const StyledTag = styled(Tag)<TagProps>(
     font-size: 12px;
     cursor: pointer;
     padding: 4px;
+  }
+
+  &:hover {
+    border-color: ${theme.palette.primary.main};
   }
 `
 );
@@ -175,20 +201,24 @@ const Listbox = styled('ul')(
 `
 );
 
-const SortableTag = (props: TagProps & { id: string }) => {
+const SortableTag = (props: TagProps & { id: string; isSelected: boolean }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.id });
 
+  const theme = useTheme();
   const style = {
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0 : 1,
     touchAction: 'none',
+    backgroundColor: props.isSelected ? (theme.palette.mode === 'dark' ? '#303030' : '#909090') : 'transparent',
   };
+
+  const { isSelected, ...tagProps } = props;
 
   return (
     <div ref={setNodeRef} style={style}>
       <StyledTag
-        {...props}
+        {...tagProps}
         handlerProps={{
           ref: setNodeRef,
           attributes,
@@ -205,26 +235,56 @@ const SortableTag = (props: TagProps & { id: string }) => {
   );
 };
 
+type PromptSet = {
+  title?: string;
+  timestamp: string;
+  positive: string[];
+  negative: string[];
+};
+
 interface CustomAutocompleteProps {
-  tagList: string[];
   tagLabel: string;
-  onChange: (selectedTags: string[] | ((prev: string[]) => string[])) => void;
-  initialValue?: string[];
+  allTagList: string[];
+  setAllTagList: (allTagList: string[]) => void;
+  selectedTags: string[];
+  handleSelectedTagChange: (selectedTags: string[] | ((prev: string[]) => string[])) => void;
   onDeleteTag: (tag: string) => void;
   onClear: () => void;
+  selectedDictTags: string[];
+  setSelectedDictTags: (selectedTags: string[]) => void;
+  dictionaries: string[];
+  currentDictName: string;
+  setCurrentDictName: (dictName: string) => void;
+  dictionary: { [key: string]: string[] };
+  setDictionary: (dict: { [key: string]: string[] }) => void;
+  setDrawerOpen: (open: boolean) => void;
+  setSelectedPromptSet: (promptSet: PromptSet | null) => void;
 }
 
 export const CustomAutocomplete = ({
-  tagList,
   tagLabel,
-  onChange,
-  initialValue,
+  allTagList,
+  setAllTagList,
+  selectedTags,
+  handleSelectedTagChange,
   onDeleteTag,
   onClear,
+  selectedDictTags,
+  setSelectedDictTags,
+  dictionaries,
+  currentDictName,
+  setCurrentDictName,
+  dictionary,
+  setDictionary,
+  setDrawerOpen,
+  setSelectedPromptSet,
 }: CustomAutocompleteProps) => {
   const [inputValue, setInputValue] = useState('');
+  const [autoCompleteKey, setAutoCompleteKey] = useState<string>(new Date().toISOString());
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [startIndex, setStartIndex] = useState<number | null>(null);
+  const [dictionaryIndex, setDictionaryIndex] = useState<string>('');
 
   const {
     getRootProps,
@@ -240,17 +300,22 @@ export const CustomAutocomplete = ({
   } = useAutocomplete({
     id: 'customized-hook-' + tagLabel,
     multiple: true,
-    options: tagList,
-    value: initialValue,
+    options: allTagList,
+    value: selectedTags,
     onChange: (_, newValue) => {
-      onChange(newValue);
+      handleSelectedTagChange(newValue);
+      const newUniqueTags = sortAndRemoveDuplicates([...allTagList, ...newValue]);
+      setAllTagList(newUniqueTags);
+      localStorage.setItem(`all${tagLabel}TagList`, JSON.stringify(newUniqueTags));
+      setSelectedPromptSet(null);
     },
     inputValue: inputValue,
     onInputChange: (_, newInputValue) => {
       setInputValue(newInputValue);
     },
     getOptionLabel: (option) => option,
-    isOptionEqualToValue: (option, value) => option === value,
+    isOptionEqualToValue: (option, value) =>
+      option === value || (typeof value === 'string' && option.toLowerCase().includes(value.toLowerCase())),
   });
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -263,7 +328,11 @@ export const CustomAutocomplete = ({
       if (newTags.length > 0) {
         const uniqueNewTags = newTags.filter((tag) => !value.includes(tag));
         if (uniqueNewTags.length > 0) {
-          onChange([...value, ...uniqueNewTags]);
+          handleSelectedTagChange([...selectedTags, ...uniqueNewTags]);
+          const newUniqueTags = sortAndRemoveDuplicates([...allTagList, ...newTags]);
+          setAllTagList(newUniqueTags);
+          localStorage.setItem(`all${tagLabel}TagList`, JSON.stringify(newUniqueTags));
+          setSelectedPromptSet(null);
           setInputValue('');
         }
       }
@@ -279,18 +348,20 @@ export const CustomAutocomplete = ({
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    setStartIndex(value.indexOf(event.active.id as string));
   };
 
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      onChange((items: string[]) => {
+      handleSelectedTagChange((items: string[]) => {
         const oldIndex = items.indexOf(active.id.toString());
         const newIndex = items.indexOf(over.id.toString());
 
         return arrayMove(items, oldIndex, newIndex);
       });
+      setSelectedPromptSet(null);
     }
   }
 
@@ -301,20 +372,41 @@ export const CustomAutocomplete = ({
       const oldIndex = value.indexOf(active.id.toString());
       const newIndex = value.indexOf(over.id.toString());
       const newValue = arrayMove(value, oldIndex, newIndex);
-      onChange(newValue);
+      handleSelectedTagChange(newValue);
+      setSelectedPromptSet(null);
+    } else if (over && active.id === over.id && startIndex === value.indexOf(active.id.toString())) {
+      const clickedTag = active.id.toString();
+      const updateSelectedDictTags = selectedDictTags.includes(clickedTag)
+        ? selectedDictTags.filter((tag) => tag !== clickedTag)
+        : [...selectedDictTags, clickedTag];
+      setSelectedDictTags(updateSelectedDictTags);
     }
 
     setActiveId(null);
   };
 
+  const handleAddFromDictionary = (selectedIndex: string) => {
+    const newTags = dictionary[selectedIndex];
+    const uniqueNewTags = newTags.filter((tag) => !value.includes(tag));
+    handleSelectedTagChange([...selectedTags, ...uniqueNewTags]);
+    const newUniqueTags = sortAndRemoveDuplicates([...allTagList, ...newTags]);
+    setAllTagList(newUniqueTags);
+    localStorage.setItem(`all${tagLabel}TagList`, JSON.stringify(newUniqueTags));
+    setSelectedPromptSet(null);
+  };
+
+  const sortAndRemoveDuplicates = (arr: string[]) => {
+    return Array.from(new Set(arr)).sort((a, b) => a.localeCompare(b));
+  };
+
   return (
     <Root>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', mt: 2 }}>
         <Label {...getInputLabelProps()} sx={{ color: tagLabel === 'Positive' ? 'primary.main' : 'error.main' }}>
           {tagLabel}
         </Label>
         <IconButton onClick={onClear} size='small'>
-          <ClearIcon fontSize='small' />
+          <Clear fontSize='small' />
         </IconButton>
       </Box>
       <div {...getRootProps()}>
@@ -337,24 +429,38 @@ export const CustomAutocomplete = ({
                     label={option}
                     onDelete={() => {
                       const newValue = value.filter((item) => item !== option);
-                      onChange(newValue);
+                      handleSelectedTagChange(newValue);
+                      setSelectedPromptSet(null);
+                      if (selectedDictTags.includes(option)) {
+                        setSelectedDictTags(selectedDictTags.filter((tag) => tag !== option));
+                      }
                     }}
+                    isSelected={selectedDictTags.includes(option)}
                   />
                 );
               })}
             </SortableContext>
-            <DragOverlay>{activeId ? <StyledTag label={activeId} {...getTagProps({ index: 0 })} /> : null}</DragOverlay>
+            <DragOverlay>
+              {activeId
+                ? (() => {
+                    const { key, ...tagPropsWithoutKey } = getTagProps({ index: 0 });
+                    return <StyledTag key={parseInt(activeId)} label={activeId} {...tagPropsWithoutKey} />;
+                  })()
+                : null}
+            </DragOverlay>
           </DndContext>
           <input {...getInputProps()} onKeyDown={handleKeyDown} />
         </InputWrapper>
       </div>
       {groupedOptions.length > 0 ? (
-        <Listbox {...getListboxProps()}>
+        <Listbox {...getListboxProps()} sx={{ zIndex: 100 }}>
           {(groupedOptions as string[]).map((option, index) => {
-            const optionProps = getOptionProps({ option, index });
+            const { key, ...optionProps } = getOptionProps({ option, index }) as {
+              key: string;
+            } & React.HTMLAttributes<HTMLLIElement>;
             return (
               <li
-                key={index}
+                key={key}
                 {...optionProps}
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
@@ -370,11 +476,11 @@ export const CustomAutocomplete = ({
                         onDeleteTag(option);
                       }}
                     >
-                      <ClearIcon fontSize='small' />
+                      <Clear fontSize='small' />
                     </IconButton>
                   )}
                   <IconButton size='small'>
-                    <CheckIcon fontSize='small' />
+                    <Check fontSize='small' />
                   </IconButton>
                 </div>
               </li>
@@ -382,6 +488,93 @@ export const CustomAutocomplete = ({
           })}
         </Listbox>
       ) : null}
+      <Grid container sx={{ mt: 1 }}>
+        <Grid item xs={3}>
+          <FormControl fullWidth>
+            <InputLabel id={`select-dict-${tagLabel}`}>Dictionary</InputLabel>
+            <Select
+              size='small'
+              labelId={`select-dict-${tagLabel}`}
+              id={`select-dict-${tagLabel}`}
+              value={currentDictName}
+              label='Dictionary'
+              onChange={(e) => setCurrentDictName(e.target.value)}
+              sx={{ mr: 1 }}
+            >
+              {dictionaries.map((dictName) => (
+                <MenuItem key={dictName} value={dictName}>
+                  {dictName}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={4.5}>
+          <Autocomplete
+            key={autoCompleteKey}
+            id={`prompt-logs-${tagLabel}`}
+            options={Object.keys(dictionary)}
+            autoComplete
+            disableClearable
+            size='small'
+            sx={{ mr: 1 }}
+            onChange={(_, newValue) => {
+              handleAddFromDictionary(newValue as string);
+              setAutoCompleteKey(new Date().toISOString());
+            }}
+            renderInput={(params) => <TextField {...params} label='▲ Put tags from Dict' />}
+          />
+        </Grid>
+        <Grid item xs={4.5} sx={{ display: 'flex', alignItems: 'center' }}>
+          <TextField
+            type='text'
+            value={dictionaryIndex}
+            onChange={(e) => setDictionaryIndex(e.target.value)}
+            size='small'
+            label='▼ Add tags to Dict'
+            placeholder='Enter a index title'
+            sx={{ width: 'calc(100% - 36px)' }}
+            InputProps={{
+              endAdornment: (
+                <Button
+                  variant='outlined'
+                  disabled={selectedDictTags.length === 0 || dictionaryIndex.trim() === ''}
+                  size='small'
+                  sx={{ textTransform: 'none' }}
+                  onClick={async () => {
+                    try {
+                      await addToDictionary(
+                        tagLabel === 'Positive' ? 'positive' : 'negative',
+                        currentDictName,
+                        dictionaryIndex,
+                        selectedDictTags
+                      );
+                      const newDictionary = { ...dictionary, [dictionaryIndex]: selectedDictTags };
+                      const sortedKeys = Object.keys(newDictionary).sort((a, b) => a.localeCompare(b, 'ja'));
+                      const sortedDictionary = sortedKeys.reduce((acc, key) => {
+                        acc[key] = newDictionary[key];
+                        return acc;
+                      }, {} as typeof newDictionary);
+                      setDictionary(sortedDictionary);
+                      setSelectedDictTags([]);
+                      setDictionaryIndex('');
+                    } catch (error) {
+                      console.error('Error adding tags to dictionary:', error);
+                    }
+                  }}
+                >
+                  Add
+                </Button>
+              ),
+            }}
+          />
+          <Tooltip title='Manage Dictionary' arrow>
+            <IconButton onClick={() => setDrawerOpen(true)}>
+              <Settings fontSize='small' />
+            </IconButton>
+          </Tooltip>
+        </Grid>
+      </Grid>
     </Root>
   );
 };

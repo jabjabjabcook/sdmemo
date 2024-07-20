@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
@@ -26,9 +27,9 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-func (a *App) SelectSaveFileUri() (string, error) {
+func (a *App) SelectSaveFileUri(prefix string) (string, error) {
     now := time.Now()
-    defaultFileName := now.Format("log_20060102_1504.json")
+    defaultFileName := fmt.Sprintf("%s_%s.json", prefix, now.Format("20060102_1504"))
     file, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
         Title: "Please select export file uri.",
         DefaultFilename: defaultFileName,
@@ -56,7 +57,7 @@ func (a *App) ExportLogs(fileUri string, data string) error {
 
 func (a *App) SelectFile() (string, error) {
     file, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-        Title: "Please select log file.",
+        Title: "Please select a file.",
         Filters: []wailsRuntime.FileFilter{
             {
                 DisplayName: "JSON Files (*.json)",

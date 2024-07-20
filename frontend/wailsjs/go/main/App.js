@@ -14,6 +14,6 @@ export function SelectFile() {
   return window['go']['main']['App']['SelectFile']();
 }
 
-export function SelectSaveFileUri() {
-  return window['go']['main']['App']['SelectSaveFileUri']();
+export function SelectSaveFileUri(arg1) {
+  return window['go']['main']['App']['SelectSaveFileUri'](arg1);
 }

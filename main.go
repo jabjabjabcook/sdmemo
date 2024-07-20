@@ -22,6 +22,7 @@ func main() {
 		Height: 710,
 		MinWidth: 760,
 		MinHeight: 480,
+		EnableDefaultContextMenu: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
